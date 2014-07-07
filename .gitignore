@@ -1,0 +1,16 @@
+*.o
+*.a
+*.swp
+*.log
+*.tar.gz
+
+main.elf
+main.bin
+main.map
+main.info_elf
+tags
+cscope.out
+cscope.in.out
+cscope.po.out
+main
+Cor*
