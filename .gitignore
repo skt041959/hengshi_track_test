@@ -3,6 +3,7 @@
 *.swp
 *.log
 *.tar.gz
+*.pyc
 
 main.elf
 main.bin
@@ -14,3 +15,6 @@ cscope.in.out
 cscope.po.out
 main
 Cor*
+
+.directory
+.gdb_history

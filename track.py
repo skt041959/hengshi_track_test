@@ -3,11 +3,16 @@ import numpy as np
 import IPython
 import sys
 
+a1 = (1, (786, 303, 11, 11))
+a2 = (2, (787, 291, 11, 14))
+a3 = (3, (788, 279, 11, 14))
+a4 = (4, (788, 268, 12, 11))
+
 comm = sys.argv[1]
 s = int(sys.argv[2])
 
-img1 = cv2.imread('{0}_img{1:04}.bmp'.format(comm, s), cv2.CV_LOAD_IMAGE_GRAYSCALE)
-img2 = cv2.imread('{0}_img{1:04}.bmp'.format(comm, s+1), cv2.CV_LOAD_IMAGE_GRAYSCALE)
+img1 = cv2.imread('{0}/{0}{1:04}.bmp'.format(comm, s), cv2.CV_LOAD_IMAGE_GRAYSCALE)
+img2 = cv2.imread('{0}/{0}{1:04}.bmp'.format(comm, s+1), cv2.CV_LOAD_IMAGE_GRAYSCALE)
 
 diff = cv2.absdiff(img1, img2)
 diff2 = cv2.GaussianBlur(diff, (3,3), 0)
@@ -15,8 +20,8 @@ retval,bin1 = cv2.threshold(diff2, 5, 255, cv2.THRESH_BINARY)
 
 k = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
 
-bin2 = cv2.erode(bin1, k)
-bin2 = cv2.dilate(bin2, k)
+bin2 = cv2.dilate(bin1, k)
+bin2 = cv2.erode(bin2, k)
 bin2 = cv2.dilate(bin2, k)
 print(bin2.nonzero()[0].size)
 
@@ -62,8 +67,8 @@ term_crit = ( cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1 )
 cv2.namedWindow('track', cv2.WINDOW_NORMAL)
 cv2.namedWindow('origin', cv2.WINDOW_NORMAL)
 
-for i in range(s, 200):
-    frame = cv2.imread('{1}_img{0:04}.bmp'.format(i, comm))
+for i in range(s+1, 200):
+    frame = cv2.imread('{1}/{1}{0:04}.bmp'.format(i, comm))
     back = cv2.calcBackProject([frame], [0], hist, [0,256], 1)
     track_box, track_window = cv2.CamShift(back, track_window, term_crit)
     print(i, track_window, track_box)

@@ -9,7 +9,7 @@ using namespace cv;
 using namespace std;
 
 extern CvMat* cvGetSubRect_d( const CvArr* arr, CvMat* submat, CvRect rect );
-extern void cvMoments( const void* array, CvMoments* moments, int binary );
+extern void cvMoments_d( const void* array, CvMoments* moments, int binary );
 
 int cvMeanShift_d( const void* imgProb, CvRect windowIn,
              CvTermCriteria criteria, CvConnectedComp* comp )

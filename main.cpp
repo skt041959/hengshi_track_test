@@ -110,12 +110,24 @@ int main(int argc, char * argv[])
     Mat last, diff, bin1, bin2, eage, gray_out;
     Rect bord;
     index = atoi(argv[1]);
+    KalmanFilter KF(4, 2, 0);
+    Mat measurement = Mat::zeros(2, 1, CV_32F);
+    Mat prediction;
+    KF.transitionMatrix = *(Mat_<float>(4, 4) << 1, 0, 1, 0,\
+            0, 1, 0, 1,\
+            0, 0, 1, 0,\
+            0, 0, 0, 1);
+
+    setIdentity(KF.measurementMatrix);
+    setIdentity(KF.processNoiseCov, Scalar::all(1e-5));
+    setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
+    setIdentity(KF.errorCovPost, Scalar::all(1));
 
     while( index < 200 )
     {
         sprintf(filename, "CorpQtz0k_img/CorpQtz0k_img%04d.bmp", index++);
         //sprintf(filename, "CorUR1C8s_img/CorUR1C8s_img%04d.bmp", index++);
-        printf("%s\n", filename);
+        printf("%d\n", index);
         gray = imread(filename, IMREAD_GRAYSCALE);
 
         if( findtarget )
@@ -155,6 +167,10 @@ int main(int argc, char * argv[])
                 normalize(hist, hist, 0, 255, CV_MINMAX);
                 findtarget--;
                 trackWindow = bord;
+                KF.statePost.at<float>(0) = bord.x+bord.width/2;
+                KF.statePost.at<float>(1) = bord.y+bord.height/2;
+                KF.statePost.at<float>(2) = 0;
+                KF.statePost.at<float>(3) = 0;
                 goto cam;
             }
         }
@@ -172,15 +188,59 @@ cam:
             term.type = 3;
 
             CvRect rect;
-            rect.x = trackWindow.x;
-            rect.y = trackWindow.y;
-            rect.width = trackWindow.width;
-            rect.height = trackWindow.height;
+            prediction = KF.predict();
+            printf("measure x:%d, y:%d, width:%d, height:%d\n", trackWindow.x, trackWindow.y, trackWindow.width, trackWindow.height);
+            printf("prediction %f, %f\n", prediction.at<float>(0), prediction.at<float>(1));
+
+            if(prediction.at<float>(0) < trackWindow.x)
+            {
+                rect.x = prediction.at<float>(0);
+                rect.width = trackWindow.width + trackWindow.x - prediction.at<float>(0);
+            }
+            else if(prediction.at<float>(0) > (trackWindow.x+trackWindow.width))
+            {
+                rect.x = trackWindow.x;
+                rect.width = prediction.at<float>(0) - trackWindow.x;
+            }
+            else
+            {
+                rect.x = trackWindow.x;
+                rect.width = trackWindow.width;
+            }
+
+            if(prediction.at<float>(1) < trackWindow.y)
+            {
+                rect.y = prediction.at<float>(1);
+                rect.height = trackWindow.height + trackWindow.y - prediction.at<float>(1);
+            }
+            else if(prediction.at<float>(1) > (trackWindow.y+trackWindow.height))
+            {
+                rect.y = trackWindow.y;
+                rect.height = prediction.at<float>(1) - trackWindow.y;
+            }
+            else
+            {
+                rect.y = trackWindow.y;
+                rect.height = trackWindow.height;
+            }
+
+            //Mat roi_gray(gray, bord);
+
             CvMat c_probImage = backproj;
             int ret = cvCamShift_d(&c_probImage, rect, term, &comp, &box);
+            if(ret == -1)
+            {
+                printf("lost......\n");
+                code = getchar();
+            }
             trackWindow = comp.rect;
             RotatedRect trackBox = RotatedRect(Point2f(box.center), Size2f(box.size), box.angle);
             printf("x:%d, y:%d, width:%d, height:%d\n", trackWindow.x, trackWindow.y, trackWindow.width, trackWindow.height);
+
+            measurement.at<float>(0) = trackBox.center.x;
+            measurement.at<float>(1) = trackBox.center.y;
+            KF.correct(measurement);
+
             cvtColor(gray, gray_out, CV_GRAY2BGR);
             ellipse(gray_out, trackBox, Scalar(0, 0, 255), 1, CV_AA);
             imshow("back", backproj);
