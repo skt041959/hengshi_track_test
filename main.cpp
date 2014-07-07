@@ -20,9 +20,10 @@ int vmin = 10, vmax = 256, smin = 30;
 uint32_t paused;
 
 //! updates the object tracking window using CAMSHIFT algorithm
-extern RotatedRect CamShift_d( InputArray probImage,
-                              CV_OUT CV_IN_OUT Rect& window,
-                              TermCriteria criteria );
+extern int cvCamShift_d( const void* imgProb, CvRect windowIn,
+            CvTermCriteria criteria,
+            CvConnectedComp* _comp,
+            CvBox2D* box );
 extern void Canny_d( InputArray _src, OutputArray _dst,
                     double low_thresh, double high_thresh,
                     int aperture_size, bool L2gradient );
@@ -112,8 +113,8 @@ int main(int argc, char * argv[])
 
     while( index < 200 )
     {
-        //sprintf(filename, "CorpQtz0k_img/CorpQtz0k_img%04d.bmp", index++);
-        sprintf(filename, "CorUR1C8s_img/CorUR1C8s_img%04d.bmp", index++);
+        sprintf(filename, "CorpQtz0k_img/CorpQtz0k_img%04d.bmp", index++);
+        //sprintf(filename, "CorUR1C8s_img/CorUR1C8s_img%04d.bmp", index++);
         printf("%s\n", filename);
         gray = imread(filename, IMREAD_GRAYSCALE);
 
@@ -161,8 +162,24 @@ int main(int argc, char * argv[])
         {
 cam:
             calcBackProject(&gray, 1, 0, hist, backproj, &phranges);
-            TermCriteria term = TermCriteria(CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 10, 1);
-            RotatedRect trackBox = CamShift_d(backproj, trackWindow, term);
+            //RotatedRect trackBox = CamShift_d(backproj, trackWindow, term);
+            CvConnectedComp comp;
+            CvBox2D box;
+
+            CvTermCriteria term;
+            term.max_iter = 100;
+            term.epsilon = 1;
+            term.type = 3;
+
+            CvRect rect;
+            rect.x = trackWindow.x;
+            rect.y = trackWindow.y;
+            rect.width = trackWindow.width;
+            rect.height = trackWindow.height;
+            CvMat c_probImage = backproj;
+            int ret = cvCamShift_d(&c_probImage, rect, term, &comp, &box);
+            trackWindow = comp.rect;
+            RotatedRect trackBox = RotatedRect(Point2f(box.center), Size2f(box.size), box.angle);
             printf("x:%d, y:%d, width:%d, height:%d\n", trackWindow.x, trackWindow.y, trackWindow.width, trackWindow.height);
             cvtColor(gray, gray_out, CV_GRAY2BGR);
             ellipse(gray_out, trackBox, Scalar(0, 0, 255), 1, CV_AA);

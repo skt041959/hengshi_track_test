@@ -230,43 +230,4 @@ int cvCamShift_d( const void* imgProb, CvRect windowIn,
     return itersUsed;
 }
 
-
-RotatedRect CamShift_d( InputArray _probImage, Rect& window,
-                              TermCriteria criteria )
-{
-    CvConnectedComp comp;
-    CvBox2D box;
-
-    box.center.x = box.center.y = 0; box.angle = 0; box.size.width = box.size.height = 0;
-    comp.rect.x = comp.rect.y = comp.rect.width = comp.rect.height = 0;
-
-    Mat probImage = _probImage.getMat();
-    CvMat c_probImage = probImage;
-
-    CvTermCriteria term;
-    term.max_iter = criteria.maxCount;
-    term.epsilon = criteria.epsilon;
-    term.type = criteria.type;
-    
-    CvRect rect;
-    rect.x = window.x;
-    rect.y = window.y;
-    rect.width = window.width;
-    rect.height = window.height;
-
-    cvCamShift_d(&c_probImage, rect, term, &comp, &box);
-    window = comp.rect;
-    return RotatedRect(Point2f(box.center), Size2f(box.size), box.angle);
-}
-
-int meanShift_d( InputArray _probImage, Rect& window, TermCriteria criteria )
-{
-    CvConnectedComp comp;
-    Mat probImage = _probImage.getMat();
-    CvMat c_probImage = probImage;
-    int iters = cvMeanShift_d(&c_probImage, window, (CvTermCriteria)criteria, &comp );
-    window = comp.rect;
-    return iters;
-}
-
 /* End of file. */
