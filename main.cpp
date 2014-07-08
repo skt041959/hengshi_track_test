@@ -110,6 +110,7 @@ int main(int argc, char * argv[])
     Mat last, diff, bin1, bin2, eage, gray_out;
     Rect bord;
     index = atoi(argv[1]);
+
     KalmanFilter KF(4, 2, 0);
     Mat measurement = Mat::zeros(2, 1, CV_32F);
     Mat prediction;
@@ -125,8 +126,8 @@ int main(int argc, char * argv[])
 
     while( index < 200 )
     {
-        sprintf(filename, "CorpQtz0k_img/CorpQtz0k_img%04d.bmp", index++);
-        //sprintf(filename, "CorUR1C8s_img/CorUR1C8s_img%04d.bmp", index++);
+        //sprintf(filename, "CorpQtz0k_img/CorpQtz0k_img%04d.bmp", index++);
+        sprintf(filename, "CorUR1C8s_img/CorUR1C8s_img%04d.bmp", index++);
         printf("%d\n", index);
         gray = imread(filename, IMREAD_GRAYSCALE);
 
@@ -141,11 +142,11 @@ int main(int argc, char * argv[])
             {
                 absdiff(gray, last, diff);
                 GaussianBlur(diff, diff, Size(3, 3), 0);
-                threshold(diff, bin1, 5, 255, CV_THRESH_BINARY);
+                threshold(diff, bin1, 30, 255, CV_THRESH_BINARY);
                 printf("bin1\n");
                 imshow("test", bin1);
                 waitKey(-1);
-                Mat element = getStructuringElement(MORPH_RECT, Point(5,5));
+                Mat element = getStructuringElement(MORPH_RECT, Point(10,10));
                 dilate(bin1, bin2, element);
                 erode(bin2, bin1, element);
                 dilate(bin1, bin2, element);
