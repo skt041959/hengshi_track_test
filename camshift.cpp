@@ -138,7 +138,7 @@ int cvCamShift_d( const void* imgProb, CvRect windowIn,
     cvGetSubRect( mat, &cur_win, windowIn );
 
     /* Calculating moments in new center mass */
-    cvMoments( &cur_win, &moments );
+    cvMoments_d( &cur_win, &moments, 0 );
 
     m00 = moments.m00;
     m10 = moments.m10;

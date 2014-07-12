@@ -41,7 +41,8 @@ endif
 OBJS= ./main.o\
 	  ./camshift.o\
 	  ./canny.o array.o \
-	  ./moments.o
+	  ./moments.o \
+	  ./kalman.o
 
 main : $(OBJS)
 	$(CC) -g -o main $(OBJS) -lpthread -lstdc++  $(OPENCV_LIBS) $(OPENCV_EXTRA_LIBS)

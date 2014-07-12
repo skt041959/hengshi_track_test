@@ -1,9 +1,9 @@
 #ifndef __OPENCV_PRECOMP_H__
 #define __OPENCV_PRECOMP_H__
 
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/imgproc/imgproc_c.h"
-#include "opencv2/core/internal.hpp"
+#include "imgproc/imgproc.hpp"
+#include "imgproc/imgproc_c.h"
+#include "core/internal.hpp"
 #include <math.h>
 #include <assert.h>
 #include <string.h>

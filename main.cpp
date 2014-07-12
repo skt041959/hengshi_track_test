@@ -21,14 +21,14 @@ uint32_t paused;
 
 //! updates the object tracking window using CAMSHIFT algorithm
 extern int cvCamShift_d( const void* imgProb, CvRect windowIn,
-            CvTermCriteria criteria,
-            CvConnectedComp* _comp,
-            CvBox2D* box );
+        CvTermCriteria criteria,
+        CvConnectedComp* _comp,
+        CvBox2D* box );
 extern void Canny_d( InputArray _src, OutputArray _dst,
-                    double low_thresh, double high_thresh,
-                    int aperture_size, bool L2gradient );
+        double low_thresh, double high_thresh,
+        int aperture_size, bool L2gradient );
 
-void bsize(Mat & src, Rect & r)
+void bsize(Mat & src, CvRect & r)
 {
     Mat t;
     int i,j;
@@ -57,58 +57,28 @@ void bsize(Mat & src, Rect & r)
     r.height = b[3]-b[2];
 }
 
-void fill(Mat & src)
-{
-    int i,j;
-    bool in;
-    for(i=0; i<src.rows; i++)
-    {
-        in = false;
-        for(j=0; j<src.cols; j++)
-        {
-            if(src.at<uchar>(i, j+1)==255u && src.at<uchar>(i, j)==0u)
-            {
-                if(in == false)
-                {
-                    in = true;
-                    continue;
-                }
-                else
-                {
-                    in = false;
-                }
-            }
-            if(in == true)
-            {
-                if(src.at<uchar>(i, j)==255u && src.at<uchar>(i, j+1)==0u)
-                    in = false;
-                else
-                    src.at<uchar>(i, j) = 255u;
-            }
-        }
-    }
-}
-
 int main(int argc, char * argv[])
 {
-    char code;
-
-    Rect trackWindow;
     int hsize = 16;
-    int index;
     float hranges[] = {0,256};
     const float* phranges = hranges;
-    char uniqueName[128];
+    //char uniqueName[128];
     char filename[128];
 
-    namedWindow("CamShift", WINDOW_AUTOSIZE );
-    namedWindow("back", WINDOW_AUTOSIZE );
-    namedWindow("test", WINDOW_AUTOSIZE );
+    namedWindow("back", WINDOW_NORMAL );
+    namedWindow("test", WINDOW_NORMAL );
+    namedWindow("CamShift", WINDOW_NORMAL );
+
     int findtarget = 2;
+    int track = 0;
+    char code;
 
     Mat frame, mask, hist, backproj;
     Mat last, diff, bin1, bin2, eage, gray_out;
-    Rect bord;
+    CvRect bord;
+    CvRect trackWindow;
+    RotatedRect trackBox;
+    int index;
     index = atoi(argv[1]);
 
     KalmanFilter KF(4, 2, 0);
@@ -119,17 +89,19 @@ int main(int argc, char * argv[])
             0, 0, 1, 0,\
             0, 0, 0, 1);
 
-    setIdentity(KF.measurementMatrix);
-    setIdentity(KF.processNoiseCov, Scalar::all(1e-5));
-    setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
-    setIdentity(KF.errorCovPost, Scalar::all(1));
+    setIdentity(KF.measurementMatrix, Scalar::all(1));
+    setIdentity(KF.processNoiseCov, Scalar::all(1));
+    setIdentity(KF.measurementNoiseCov, Scalar::all(2));
+    setIdentity(KF.errorCovPost, Scalar::all(5));
 
-    while( index < 200 )
+    while( index < 500 )
     {
+        //printf("%d\n", index);
         //sprintf(filename, "CorpQtz0k_img/CorpQtz0k_img%04d.bmp", index++);
-        sprintf(filename, "CorUR1C8s_img/CorUR1C8s_img%04d.bmp", index++);
-        printf("%d\n", index);
+        //sprintf(filename, "CorUR1C8s_img/CorUR1C8s_img%04d.bmp", index++);
+        sprintf(filename, "CorSTvjfE_img/CorSTvjfE_img%04d.bmp", index++);
         gray = imread(filename, IMREAD_GRAYSCALE);
+        cvtColor(gray, gray_out, CV_GRAY2BGR);
 
         if( findtarget )
         {
@@ -140,21 +112,29 @@ int main(int argc, char * argv[])
             }
             else
             {
+                track = 0;
                 absdiff(gray, last, diff);
                 GaussianBlur(diff, diff, Size(3, 3), 0);
                 threshold(diff, bin1, 30, 255, CV_THRESH_BINARY);
                 printf("bin1\n");
-                imshow("test", bin1);
-                waitKey(-1);
+                //imshow("test", bin1);
+                //waitKey(-1);
                 Mat element = getStructuringElement(MORPH_RECT, Point(10,10));
                 dilate(bin1, bin2, element);
                 erode(bin2, bin1, element);
                 dilate(bin1, bin2, element);
-                printf("bin2\n");
+                //printf("bin2\n");
                 imshow("test", bin2);
-                waitKey(-1);
+                //waitKey(-1);
                 bsize(bin2, bord);
-                printf("%d, %d, %d, %d\n", bord.x, bord.y, bord.width, bord.height);
+                printf("bord %d, %d, %d, %d\n", bord.x, bord.y, bord.width, bord.height);
+                if( bord.width <= 0 || bord.height <= 0 )
+                {
+                    //imwrite("error.bmp", bin2);
+                    gray.copyTo(last);
+                    findtarget = 1;
+                    goto staticimg;
+                }
 
                 Mat roi_gray(gray, bord);
                 eage = Mat::zeros( gray.rows, gray.cols, CV_8UC1);
@@ -166,10 +146,13 @@ int main(int argc, char * argv[])
                 drawContours(roi_eage, contours, -1, Scalar(255), CV_FILLED);
                 calcHist(&roi_gray, 1, 0, roi_eage, hist, 1, &hsize, &phranges);
                 normalize(hist, hist, 0, 255, CV_MINMAX);
+
                 findtarget--;
                 trackWindow = bord;
-                KF.statePost.at<float>(0) = bord.x+bord.width/2;
-                KF.statePost.at<float>(1) = bord.y+bord.height/2;
+                rectangle(gray_out, Point(trackWindow.x, trackWindow.y), Point(trackWindow.x+trackWindow.width, trackWindow.y+trackWindow.height), Scalar(255, 0, 255), 2);
+                printf("set KF start state\n");
+                KF.statePost.at<float>(0) = bord.x+bord.width/2.f;
+                KF.statePost.at<float>(1) = bord.y+bord.height/2.f;
                 KF.statePost.at<float>(2) = 0;
                 KF.statePost.at<float>(3) = 0;
                 goto cam;
@@ -179,7 +162,6 @@ int main(int argc, char * argv[])
         {
 cam:
             calcBackProject(&gray, 1, 0, hist, backproj, &phranges);
-            //RotatedRect trackBox = CamShift_d(backproj, trackWindow, term);
             CvConnectedComp comp;
             CvBox2D box;
 
@@ -188,65 +170,85 @@ cam:
             term.epsilon = 1;
             term.type = 3;
 
-            CvRect rect;
-            prediction = KF.predict();
-            printf("measure x:%d, y:%d, width:%d, height:%d\n", trackWindow.x, trackWindow.y, trackWindow.width, trackWindow.height);
-            printf("prediction %f, %f\n", prediction.at<float>(0), prediction.at<float>(1));
+            CvRect rect = trackWindow;
+            unsigned int direction = 0;
+            //if(track != 0)
+            {
+                printf("-------predict\n");
+                prediction = KF.predict();
+                printf("predict %f, %f\n", prediction.at<float>(0), prediction.at<float>(1));
 
-            if(prediction.at<float>(0) < trackWindow.x)
-            {
-                rect.x = prediction.at<float>(0);
-                rect.width = trackWindow.width + trackWindow.x - prediction.at<float>(0);
-            }
-            else if(prediction.at<float>(0) > (trackWindow.x+trackWindow.width))
-            {
-                rect.x = trackWindow.x;
-                rect.width = prediction.at<float>(0) - trackWindow.x;
-            }
-            else
-            {
-                rect.x = trackWindow.x;
-                rect.width = trackWindow.width;
-            }
+                int dx, dy;
+                dx = prediction.at<float>(0) - trackBox.center.x;
+                dy = prediction.at<float>(1) - trackBox.center.y;
+                if(dx < 0)
+                    rect.x = trackWindow.x + dx; 
+                else
+                    rect.width = trackWindow.width + dx; 
 
-            if(prediction.at<float>(1) < trackWindow.y)
-            {
-                rect.y = prediction.at<float>(1);
-                rect.height = trackWindow.height + trackWindow.y - prediction.at<float>(1);
+                if(dy < 0)
+                    rect.y = trackWindow.y + dy; 
+                else
+                    rect.height = trackWindow.height + dy;
+                if(dx>0)
+                    direction |= 0x1;
+                if(dy>0)
+                    direction |= 0x2;
+                circle(gray_out, Point2f(prediction.at<float>(0), prediction.at<float>(1)), 3, Scalar(255, 0, 0), 2, CV_AA);
             }
-            else if(prediction.at<float>(1) > (trackWindow.y+trackWindow.height))
-            {
-                rect.y = trackWindow.y;
-                rect.height = prediction.at<float>(1) - trackWindow.y;
-            }
-            else
-            {
-                rect.y = trackWindow.y;
-                rect.height = trackWindow.height;
-            }
-
-            //Mat roi_gray(gray, bord);
 
             CvMat c_probImage = backproj;
+            rectangle(gray_out, Point(rect.x, rect.y), Point(rect.x+rect.width, rect.y+rect.height), Scalar(0, 255, 0), 2);
+            printf("search x1:%d, y1:%d, x2:%d, y2:%d\n", rect.x, rect.y, rect.x+rect.width, rect.y+rect.height);
             int ret = cvCamShift_d(&c_probImage, rect, term, &comp, &box);
+            int iter = 4;
+            while(ret == -1 && iter)
+            {
+                CvRect rect_alt = rect;
+                switch( (direction+iter)%4 )
+                {
+                    case 0: rect_alt.x -= rect.width;
+                            rect_alt.y -= rect.height;
+                            break;
+                    case 1: rect_alt.x -= rect.width;
+                            rect_alt.y += rect.height;
+                            break;
+                    case 2: rect_alt.x += rect.width;
+                            rect_alt.y -= rect.height;
+                            break;
+                    case 3: rect_alt.x += rect.width;
+                            rect_alt.y += rect.height;
+                            break;
+                }
+                printf("lost...search%d  x1:%d, y1:%d, x2:%d, y2:%d\n", iter, rect_alt.x, rect_alt.y, rect_alt.x+rect_alt.width, rect_alt.y+rect_alt.height);
+                rectangle(gray_out, Point(rect_alt.x, rect_alt.y), Point(rect_alt.x+rect_alt.width, rect_alt.y+rect_alt.height), Scalar(0, 255, 0), 2);
+                ret = cvCamShift_d(&c_probImage, rect_alt, term, &comp, &box);
+                iter--;
+            }
             if(ret == -1)
             {
-                printf("lost......\n");
-                code = getchar();
+                printf("retry......\n");
+                gray.copyTo(last);
+                findtarget = 1;
+                goto lost;
             }
+            track = 1;
+            trackBox = RotatedRect(Point2f(box.center), Size2f(box.size), box.angle);
             trackWindow = comp.rect;
-            RotatedRect trackBox = RotatedRect(Point2f(box.center), Size2f(box.size), box.angle);
-            printf("x:%d, y:%d, width:%d, height:%d\n", trackWindow.x, trackWindow.y, trackWindow.width, trackWindow.height);
+            printf("measure x:%d, y:%d\n", trackWindow.x+trackWindow.width/2, trackWindow.y+trackWindow.height/2);
 
             measurement.at<float>(0) = trackBox.center.x;
             measurement.at<float>(1) = trackBox.center.y;
+            printf("++++++++++correct\n");
             KF.correct(measurement);
 
-            cvtColor(gray, gray_out, CV_GRAY2BGR);
-            ellipse(gray_out, trackBox, Scalar(0, 0, 255), 1, CV_AA);
+            ellipse(gray_out, trackBox, Scalar(0, 0, 255), 2, CV_AA);
+
+lost:
             imshow("back", backproj);
             imshow("CamShift", gray_out);
         }
+staticimg:
         code = (char)waitKey(-1);
         if(code == 'q')
             break;
