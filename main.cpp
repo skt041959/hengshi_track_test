@@ -67,7 +67,7 @@ int main(int argc, char * argv[])
 
     namedWindow("back", WINDOW_NORMAL );
     namedWindow("test", WINDOW_NORMAL );
-    namedWindow("CamShift", WINDOW_NORMAL );
+    namedWindow("CamShift", WINDOW_AUTOSIZE );
 
     int findtarget = 2;
     int track = 0;
@@ -171,34 +171,42 @@ cam:
             term.type = 3;
 
             CvRect rect = trackWindow;
+            rectangle(gray_out, Point(trackWindow.x, trackWindow.y), Point(trackWindow.x+trackWindow.width, trackWindow.y+trackWindow.height), Scalar(0, 255, 255), 1);
             unsigned int direction = 0;
             //if(track != 0)
             {
                 printf("-------predict\n");
                 prediction = KF.predict();
+                circle(gray_out, Point2f(prediction.at<float>(0), prediction.at<float>(1)), 3, Scalar(255, 0, 0), 1, CV_AA);
                 printf("predict %f, %f\n", prediction.at<float>(0), prediction.at<float>(1));
 
                 int dx, dy;
-                dx = prediction.at<float>(0) - trackBox.center.x;
-                dy = prediction.at<float>(1) - trackBox.center.y;
+                dx = prediction.at<float>(0) - (trackWindow.x+trackWindow.width/2.f);
+                dy = prediction.at<float>(1) - (trackWindow.y+trackWindow.height/2.f);
+                printf("dx:%d, dy:%d\n", dx, dy);
                 if(dx < 0)
+                {
                     rect.x = trackWindow.x + dx; 
+                    rect.width = trackWindow.width - dx;
+                }
                 else
                     rect.width = trackWindow.width + dx; 
 
                 if(dy < 0)
+                {
                     rect.y = trackWindow.y + dy; 
+                    rect.height = trackWindow.height - dy;
+                }
                 else
                     rect.height = trackWindow.height + dy;
                 if(dx>0)
                     direction |= 0x1;
                 if(dy>0)
                     direction |= 0x2;
-                circle(gray_out, Point2f(prediction.at<float>(0), prediction.at<float>(1)), 3, Scalar(255, 0, 0), 2, CV_AA);
             }
 
             CvMat c_probImage = backproj;
-            rectangle(gray_out, Point(rect.x, rect.y), Point(rect.x+rect.width, rect.y+rect.height), Scalar(0, 255, 0), 2);
+            rectangle(gray_out, Point(rect.x, rect.y), Point(rect.x+rect.width, rect.y+rect.height), Scalar(0, 255, 0), 1);
             printf("search x1:%d, y1:%d, x2:%d, y2:%d\n", rect.x, rect.y, rect.x+rect.width, rect.y+rect.height);
             int ret = cvCamShift_d(&c_probImage, rect, term, &comp, &box);
             int iter = 4;
@@ -221,7 +229,7 @@ cam:
                             break;
                 }
                 printf("lost...search%d  x1:%d, y1:%d, x2:%d, y2:%d\n", iter, rect_alt.x, rect_alt.y, rect_alt.x+rect_alt.width, rect_alt.y+rect_alt.height);
-                rectangle(gray_out, Point(rect_alt.x, rect_alt.y), Point(rect_alt.x+rect_alt.width, rect_alt.y+rect_alt.height), Scalar(0, 255, 0), 2);
+                rectangle(gray_out, Point(rect_alt.x, rect_alt.y), Point(rect_alt.x+rect_alt.width, rect_alt.y+rect_alt.height), Scalar(0, 255, 0), 1);
                 ret = cvCamShift_d(&c_probImage, rect_alt, term, &comp, &box);
                 iter--;
             }
@@ -242,7 +250,7 @@ cam:
             printf("++++++++++correct\n");
             KF.correct(measurement);
 
-            ellipse(gray_out, trackBox, Scalar(0, 0, 255), 2, CV_AA);
+            ellipse(gray_out, trackBox, Scalar(0, 0, 255), 1, CV_AA);
 
 lost:
             imshow("back", backproj);
