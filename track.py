@@ -18,7 +18,7 @@ diff = cv2.absdiff(img1, img2)
 diff2 = cv2.GaussianBlur(diff, (3,3), 0)
 retval,bin1 = cv2.threshold(diff2, 5, 255, cv2.THRESH_BINARY)
 
-k = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
+k = cv2.getStructuringElement(cv2.MORPH_RECT, (10,10))
 
 bin2 = cv2.dilate(bin1, k)
 bin2 = cv2.erode(bin2, k)
@@ -45,7 +45,7 @@ cv2.waitKey(10)
 
 contours0, hier0 = cv2.findContours(eage, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-mask = np.zeros((1004, 992), np.uint8)
+mask = np.zeros(img1.shape, np.uint8)
 roi_mask = mask[y1:y2, x1:x2]
 
 cv2.drawContours(roi_mask, contours0, -1, (255), -1)
