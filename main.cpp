@@ -4,6 +4,9 @@
 #include "opencv2/video/tracking.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/highgui/highgui.hpp"
+#include "opencv2/calib3d/calib3d.hpp"
+#include "opencv2/features2d/features2d.hpp"
+#include "opencv2/nonfree/nonfree.hpp"
 
 using namespace cv;
 using namespace std;
@@ -95,6 +98,10 @@ int main(int argc, char * argv[])
   setIdentity(KF.processNoiseCov, Scalar::all(1));
   setIdentity(KF.measurementNoiseCov, Scalar::all(2));
   setIdentity(KF.errorCovPost, Scalar::all(5));
+
+  //Ptr<FeatureDetector> detector = FeatureDetector::create( "SIFT" );
+  //Ptr<DescriptorExtractor> descriptorExtractor = DescriptorExtractor::create( "SIFT" );
+  //Ptr<DescriptorMatcher> descriptorMatcher = DescriptorMatcher::create( "BruteForce" );
 
   while( index < 500 )
   {
