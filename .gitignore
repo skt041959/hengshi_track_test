@@ -5,6 +5,7 @@
 *.log
 *.tar.gz
 *.pyc
+*.png
 
 main.elf
 main.bin

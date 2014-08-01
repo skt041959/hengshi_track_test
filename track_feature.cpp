@@ -32,33 +32,34 @@ extern void Canny_d( InputArray _src, OutputArray _dst,
     int aperture_size, bool L2gradient );
 
 void crossCheckMatching( Ptr<DescriptorMatcher>& descriptorMatcher,
-                         const Mat& descriptors1, const Mat& descriptors2,
-                         vector<DMatch>& filteredMatches12, int knn=1 )
+    const Mat& descriptors1, const Mat& descriptors2,
+    vector<DMatch>& filteredMatches12, int knn=1 )
 {
-    filteredMatches12.clear();
-    vector<vector<DMatch> > matches12, matches21;
-    descriptorMatcher->knnMatch( descriptors1, descriptors2, matches12, knn );
-    descriptorMatcher->knnMatch( descriptors2, descriptors1, matches21, knn );
-    for( size_t m = 0; m < matches12.size(); m++ )
-    {
-        bool findCrossCheck = false;
-        for( size_t fk = 0; fk < matches12[m].size(); fk++ )
-        {
-            DMatch forward = matches12[m][fk];
+  filteredMatches12.clear();
+  vector<vector<DMatch> > matches12, matches21;
+  descriptorMatcher->knnMatch( descriptors1, descriptors2, matches12, knn );
+  descriptorMatcher->knnMatch( descriptors2, descriptors1, matches21, knn );
 
-            for( size_t bk = 0; bk < matches21[forward.trainIdx].size(); bk++ )
-            {
-                DMatch backward = matches21[forward.trainIdx][bk];
-                if( backward.trainIdx == forward.queryIdx )
-                {
-                    filteredMatches12.push_back(forward);
-                    findCrossCheck = true;
-                    break;
-                }
-            }
-            if( findCrossCheck ) break;
+  for( size_t m = 0; m < matches12.size(); m++ )
+  {
+    bool findCrossCheck = false;
+    for( size_t fk = 0; fk < matches12[m].size(); fk++ )
+    {
+      DMatch forward = matches12[m][fk];
+
+      for( size_t bk = 0; bk < matches21[forward.trainIdx].size(); bk++ )
+      {
+        DMatch backward = matches21[forward.trainIdx][bk];
+        if( backward.trainIdx == forward.queryIdx )
+        {
+          filteredMatches12.push_back(forward);
+          findCrossCheck = true;
+          break;
         }
+      }
+      if( findCrossCheck ) break;
     }
+  }
 }
 
 void bsize(Mat & src, CvRect & r)
@@ -98,13 +99,13 @@ int main(int argc, char * argv[])
   //char uniqueName[128];
   char filename[128];
 
-  namedWindow("back", WINDOW_AUTOSIZE );
+  //namedWindow("back", WINDOW_AUTOSIZE );
   namedWindow("test", WINDOW_AUTOSIZE );
   namedWindow("track", WINDOW_AUTOSIZE );
-  namedWindow("w1", WINDOW_AUTOSIZE);
-  namedWindow("w2", WINDOW_AUTOSIZE);
+  namedWindow("w1", WINDOW_NORMAL);
+  //namedWindow("w2", WINDOW_AUTOSIZE);
 
-  int findtarget = 1;
+  int findtarget = 2;
   char code;
 
   Mat frame, mask, hist, backproj;
@@ -119,7 +120,8 @@ int main(int argc, char * argv[])
   KalmanFilter KF(4, 2, 0);
   Mat measurement = Mat::zeros(2, 1, CV_32F);
   Mat prediction;
-  KF.transitionMatrix = *(Mat_<float>(4, 4) << 1, 0, 1, 0,\
+  KF.transitionMatrix = *(Mat_<float>(4, 4) <<\
+      1, 0, 1, 0,\
       0, 1, 0, 1,\
       0, 0, 1, 0,\
       0, 0, 0, 1);
@@ -129,12 +131,10 @@ int main(int argc, char * argv[])
   setIdentity(KF.measurementNoiseCov, Scalar::all(2));
   setIdentity(KF.errorCovPost, Scalar::all(5));
 
-  //cv::initModule_nonfree();
   Ptr<FeatureDetector> detector = FeatureDetector::create( "SIFT" );
   Ptr<DescriptorExtractor> descriptorExtractor = DescriptorExtractor::create( "SIFT" );
   Ptr<DescriptorMatcher> descriptorMatcher = DescriptorMatcher::create( "BruteForce" );
 
-  Mat mouse = imread("./mouse/mouse_orin.png", IMREAD_GRAYSCALE);
   vector<KeyPoint> keypoints1, keypoints2;
   vector<DMatch> filteredMatches;
   vector<int> queryIdxs, trainIdxs;
@@ -142,65 +142,164 @@ int main(int argc, char * argv[])
   vector<Point2f> points1;
   vector<Point2f> points2;
   Mat descriptors1, descriptors2;
-  detector->detect( mouse, keypoints1 );
-  cout << keypoints1.size() << " points" << endl << ">" << endl;
-  descriptorExtractor->compute( mouse, keypoints1, descriptors1 );
-#define FIRST 90
+
+  //Mat mouse = imread("./mouse/mouse_tran.png", IMREAD_GRAYSCALE);
+  //detector->detect( mouse, keypoints1 );
+  //cout << "object" << keypoints1.size() << " points" << endl << ">" << endl;
+  //descriptorExtractor->compute( mouse, keypoints1, descriptors1 );
+  //findtarget = 0;
+#define FIRST 58
   index = FIRST;
 
   while( index<500 )
   {
-    if(index == FIRST)
-    {
-      trackWindow.x = 0;
-      trackWindow.y = 0;
-      trackWindow.width = 1366;
-      trackWindow.height = 768;
-    }
-
-    sprintf(filename, "./mouse/mouse_Steel_%04d.png", index++);
+    sprintf(filename, "./mouse/mouse_Steel_1%03d.png", index++);
     printf("%s\n", filename);
     gray = imread(filename, IMREAD_GRAYSCALE);
     cvtColor(gray, gray_out, CV_GRAY2BGR);
 
-    rectangle(gray_out, trackWindow, Scalar(0, 255, 0), 1);
-
-    Mat roi_src(gray, trackWindow);
-    Mat roi_out(gray_out, trackWindow);
-
-    detector->detect( roi_src, keypoints2 );
-    cout << keypoints2.size() << " points" << endl;
-    descriptorExtractor->compute( roi_src, keypoints2, descriptors2 );
-    crossCheckMatching( descriptorMatcher, descriptors1, descriptors2, filteredMatches, 1 );
-    queryIdxs.clear();
-    trainIdxs.clear();
-    for( size_t i = 0; i < filteredMatches.size(); i++ )
+    switch( findtarget )
     {
-      printf("x:%f, y:%f\n", keypoints2[filteredMatches[i].trainIdx].pt.x, keypoints2[filteredMatches[i].trainIdx].pt.y);
-      queryIdxs.push_back( filteredMatches[i].queryIdx );
-      trainIdxs.push_back( filteredMatches[i].trainIdx );
-    }
-    //points1.clear();
-    points2.clear();
-    //KeyPoint::convert(keypoints1, points1, queryIdxs);
-    KeyPoint::convert(keypoints2, points2, trainIdxs);
-    Point2f aver;
-    for( size_t j = 0; j < points2.size(); j++)
-    {
-      aver.x += points2[j].x;
-      aver.y += points2[j].y;
-      circle(roi_out, points2[j], 3, Scalar(0, 255, 255), 1, CV_AA);
-    }
-    aver.x /= points2.size();
-    aver.y /= points2.size();
-    printf("aver x:%f, y:%f\n", aver.x, aver.y);
+      case 2:
+        gray.copyTo(last1);
+        findtarget--;
+        break;
+      case 1:
+        absdiff(gray, last1, diff);
+        threshold(diff, bin1, 5, 255, CV_THRESH_BINARY);
+        printf("bin1\n");
+        imshow("test", bin1);
+        waitKey(-1);
+        dilate(bin1, bin2, element);
+        erode(bin2, bin1, element);
+        dilate(bin1, mask, element);
+        printf("bin2\n");
+        imshow("test", mask);
+        waitKey(-1);
+        bsize(mask, bord);
+        printf("bord x:%d, y:%d, width:%d, height:%d\n", bord.x, bord.y, bord.width, bord.height);
+        if( bord.width <= 0 || bord.height <= 0 )
+        {
+          //imwrite("error.bmp", bin2);
+          gray.copyTo(last1);
+          findtarget = 1;
+          break;
+        }
+        findtarget --;
+        trackWindow = bord;
+        {
+          Mat obj(gray, trackWindow);
+          detector->detect( obj, keypoints1 );
+          cout << "object" << keypoints1.size() << " points" << endl << ">" << endl;
+          descriptorExtractor->compute( obj, keypoints1, descriptors1 );
+          for( size_t i = 0; i < keypoints1.size(); i++ )
+          {
+            printf("KeyPoint %ld, x:%f, y:%f, size:%f, angle:%f\n", i,
+                keypoints1[i].pt.x,
+                keypoints1[i].pt.y,
+                keypoints1[i].size,
+                keypoints1[i].angle);
+          }
+        }
+        printf("set KF start state\n");
+        KF.statePost.at<float>(0) = bord.x+bord.width/2.f;
+        KF.statePost.at<float>(1) = bord.y+bord.height/2.f;
+        KF.statePost.at<float>(2) = 0;
+        KF.statePost.at<float>(3) = 0;
+      case 0:
+        rectangle(gray_out, trackWindow, Scalar(0, 255, 0), 1);
+        line(gray_out, Point2d(trackWindow.x, trackWindow.y),
+            Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y + trackWindow.height - 1),
+            Scalar(0, 255, 0), 1);
+        line(gray_out, Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y),
+            Point2d(trackWindow.x, trackWindow.y + trackWindow.height - 1),
+            Scalar(0, 255, 0), 1);
+        prediction = KF.predict();
+        circle(gray_out, Point2f(prediction.at<float>(0), prediction.at<float>(1)), 3, Scalar(255, 0, 255), 1, CV_AA);
+        printf("++++++++++predict; predict x:%f, y:%f\n", prediction.at<float>(0), prediction.at<float>(1));
+        printf("trackWindow x:%d, y:%d, width:%d, height:%d\n",
+            trackWindow.x, trackWindow.y, trackWindow.width, trackWindow.height);
 
-    circle(gray_out, aver, 3, Scalar(0, 0, 255), 1, CV_AA);
-    trackWindow.x = aver.x + trackWindow.x - 60;
-    trackWindow.y = aver.y + trackWindow.y - 60;
-    trackWindow.width = 120;
-    trackWindow.height = 120;
-    printf("trackWindow x:%d, y:%d\n", trackWindow.x, trackWindow.y);
+        Mat roi_src(gray, trackWindow);
+        detector->detect( roi_src, keypoints2 );
+#define DELTA 60
+        while( keypoints2.size() < 6 )
+        {
+          trackWindow.x -= DELTA;
+          trackWindow.y -= DELTA;
+          trackWindow.width += DELTA;
+          trackWindow.height += DELTA;
+          roi_src = gray(trackWindow);
+          detector->detect( roi_src, keypoints2 );
+        }
+        Mat roi_out(gray_out, trackWindow);
+        cout << keypoints2.size() << " points" << endl;
+        descriptorExtractor->compute( roi_src, keypoints2, descriptors2 );
+
+        crossCheckMatching( descriptorMatcher, descriptors1, descriptors2, filteredMatches, 1 );
+        queryIdxs.clear();
+        trainIdxs.clear();
+        printf("match %ld points\n", filteredMatches.size() );
+        for( size_t i = 0; i < filteredMatches.size(); i++ )
+        {
+          printf("queryIdx %d, trainIdx %d, x:%f, y:%f, size:%f, angle:%f\n",
+              filteredMatches[i].queryIdx,
+              filteredMatches[i].trainIdx,
+              keypoints2[filteredMatches[i].trainIdx].pt.x,
+              keypoints2[filteredMatches[i].trainIdx].pt.y,
+              keypoints2[filteredMatches[i].trainIdx].size,
+              keypoints2[filteredMatches[i].trainIdx].angle);
+
+          float angle = keypoints2[filteredMatches[i].trainIdx].angle;
+          Point2f p = keypoints2[filteredMatches[i].trainIdx].pt;
+
+          queryIdxs.push_back( filteredMatches[i].queryIdx );
+          trainIdxs.push_back( filteredMatches[i].trainIdx );
+          circle(roi_out, p, 3, Scalar(0, 255, 255), 1, CV_AA);
+          line(roi_out, p, p + Point2f((float)cos(angle), (float)-sin(angle))*(float)30, Scalar(0, 0, 255), 1);
+        }
+        points1.clear();
+        points2.clear();
+        KeyPoint::convert(keypoints1, points1, queryIdxs);
+        KeyPoint::convert(keypoints2, points2, trainIdxs);
+        Mat status;
+        printf("findHomography\n");
+        Mat H12 = findHomography( Mat(points1), Mat(points2), CV_RANSAC, 1 , mask);
+        printf("leave findHomography\n");
+        for(int i=0; i<mask.rows; i++)
+        {
+          printf("%d:%d ", i, mask.at<uchar>(i));
+        }
+        printf("\n");
+        Point2f aver;
+        for( size_t j = 0; j < points2.size(); j++)
+        {
+          //aver.x += points2[j].x;
+          //aver.y += points2[j].y;
+          aver+=points2[j];
+        }
+        imshow("w1", roi_out);
+        aver.x /= points2.size();
+        aver.y /= points2.size();
+        printf("aver x:%f, y:%f\n", aver.x, aver.y);
+
+        trackWindow.x = aver.x + trackWindow.x - DELTA;
+        trackWindow.y = aver.y + trackWindow.y - DELTA;
+        trackWindow.width = 2*DELTA;
+        trackWindow.height = 2*DELTA;
+        rectangle(gray_out, trackWindow, Scalar(0, 0, 255), 1);
+        line(gray_out, Point2d(trackWindow.x, trackWindow.y),
+            Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y + trackWindow.height - 1),
+            Scalar(0, 0, 255), 1);
+        line(gray_out, Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y),
+            Point2d(trackWindow.x, trackWindow.y + trackWindow.height - 1),
+            Scalar(0, 0, 255), 1);
+
+        measurement.at<float>(0) = aver.x + trackWindow.x;
+        measurement.at<float>(1) = aver.y + trackWindow.y;
+        KF.correct(measurement);
+        printf("++++++++++correct; measure x:%f, y:%f\n", measurement.at<float>(0), measurement.at<float>(1));
+    }
 
     imshow("track", gray_out);
     code = waitKey(-1);
