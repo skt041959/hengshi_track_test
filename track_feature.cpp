@@ -100,7 +100,7 @@ int main(int argc, char * argv[])
   char filename[128];
 
   //namedWindow("back", WINDOW_AUTOSIZE );
-  namedWindow("test", WINDOW_AUTOSIZE );
+  //namedWindow("test", WINDOW_AUTOSIZE );
   namedWindow("track", WINDOW_AUTOSIZE );
   namedWindow("w1", WINDOW_NORMAL);
   //namedWindow("w2", WINDOW_AUTOSIZE);
@@ -109,7 +109,7 @@ int main(int argc, char * argv[])
   char code;
 
   Mat frame, mask, hist, backproj;
-  Mat last1, last2, diff, diff1, diff2, bin1, bin2, eage, gray_out;
+  Mat last, last2, diff, diff1, diff2, bin1, bin2, eage, gray_out;
   CvRect bord;
   CvRect trackWindow;
   RotatedRect trackBox;
@@ -141,6 +141,8 @@ int main(int argc, char * argv[])
   vector<char> matchesMask;
   vector<Point2f> points1;
   vector<Point2f> points2;
+  vector<Point2f> point_last;
+  vector<Point2f> point_now;
   Mat descriptors1, descriptors2;
 
   //Mat mouse = imread("./mouse/mouse_tran.png", IMREAD_GRAYSCALE);
@@ -161,27 +163,27 @@ int main(int argc, char * argv[])
     switch( findtarget )
     {
       case 2:
-        gray.copyTo(last1);
+        gray.copyTo(last);
         findtarget--;
         break;
       case 1:
-        absdiff(gray, last1, diff);
+        absdiff(gray, last, diff);
         threshold(diff, bin1, 5, 255, CV_THRESH_BINARY);
         printf("bin1\n");
-        imshow("test", bin1);
-        waitKey(-1);
+        //imshow("test", bin1);
+        //waitKey(-1);
         dilate(bin1, bin2, element);
         erode(bin2, bin1, element);
         dilate(bin1, mask, element);
         printf("bin2\n");
-        imshow("test", mask);
-        waitKey(-1);
+        //imshow("test", mask);
+        //waitKey(-1);
         bsize(mask, bord);
         printf("bord x:%d, y:%d, width:%d, height:%d\n", bord.x, bord.y, bord.width, bord.height);
         if( bord.width <= 0 || bord.height <= 0 )
         {
           //imwrite("error.bmp", bin2);
-          gray.copyTo(last1);
+          gray.copyTo(last);
           findtarget = 1;
           break;
         }
@@ -207,13 +209,54 @@ int main(int argc, char * argv[])
         KF.statePost.at<float>(2) = 0;
         KF.statePost.at<float>(3) = 0;
       case 0:
+        if( !point_last.empty() )
+        {
+          TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 20, 0.03);
+          vector<uchar> sta;
+          vector<float> err;
+
+          printf("calcOpticalFlowPyrLK\n");
+          int maxlevel = 3;
+          int valid_sum = 0;
+          do {
+            calcOpticalFlowPyrLK(last, gray, point_last, point_now, sta, err,
+                Size(30, 30), maxlevel, termcrit, 1, 0.001);
+            for( size_t i=0; i<point_now.size(); i++ )
+            {
+              if( sta[i] != 0 && err[i] <= 1 )
+                valid_sum += 1;
+            }
+            maxlevel ++;
+            //if( index>=94 )
+            //{
+            //  for(size_t i=0; i<point_now.size(); i++)
+            //  {
+            //    printf("s:%d, optical x:%.2f,y:%.2f -> x:%.2f,y:%.2f; e:%f\n",
+            //        sta[i], point_last[i].x, point_last[i].y, point_now[i].x, point_now[i].y, err[i]);
+            //  }
+            //  waitKey(-1);
+            //}
+          } while(valid_sum < 1);
+
+          for(size_t i=0; i<point_now.size(); i++)
+          {
+            printf("s:%d, optical x:%.2f,y:%.2f -> x:%.2f,y:%.2f; e:%f\n",
+                sta[i], point_last[i].x, point_last[i].y, point_now[i].x, point_now[i].y, err[i]);
+            circle(gray_out, point_now[i], 3, Scalar(0, 0, 255), 1);
+            line(gray_out, point_now[i], point_last[i], Scalar(0, 0, 255), 1);
+          }
+
+          gray.copyTo(last);
+          //cv::swap(last, gray);
+          //std::swap(point_last, point_now);
+        }
         rectangle(gray_out, trackWindow, Scalar(0, 255, 0), 1);
-        line(gray_out, Point2d(trackWindow.x, trackWindow.y),
-            Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y + trackWindow.height - 1),
-            Scalar(0, 255, 0), 1);
-        line(gray_out, Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y),
-            Point2d(trackWindow.x, trackWindow.y + trackWindow.height - 1),
-            Scalar(0, 255, 0), 1);
+        //line(gray_out, Point2d(trackWindow.x, trackWindow.y),
+        //    Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y + trackWindow.height - 1),
+        //    Scalar(0, 255, 0), 1);
+        //line(gray_out, Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y),
+        //    Point2d(trackWindow.x, trackWindow.y + trackWindow.height - 1),
+        //    Scalar(0, 255, 0), 1);
         prediction = KF.predict();
         circle(gray_out, Point2f(prediction.at<float>(0), prediction.at<float>(1)), 3, Scalar(255, 0, 255), 1, CV_AA);
         printf("++++++++++predict; predict x:%f, y:%f\n", prediction.at<float>(0), prediction.at<float>(1));
@@ -240,7 +283,7 @@ int main(int argc, char * argv[])
         queryIdxs.clear();
         trainIdxs.clear();
         printf("match %ld points\n", filteredMatches.size() );
-        for( size_t i = 0; i < filteredMatches.size(); i++ )
+        for( size_t i=0; i<filteredMatches.size(); i++ )
         {
           printf("queryIdx %d, trainIdx %d, x:%f, y:%f, size:%f, angle:%f\n",
               filteredMatches[i].queryIdx,
@@ -250,18 +293,30 @@ int main(int argc, char * argv[])
               keypoints2[filteredMatches[i].trainIdx].size,
               keypoints2[filteredMatches[i].trainIdx].angle);
 
-          float angle = keypoints2[filteredMatches[i].trainIdx].angle;
           Point2f p = keypoints2[filteredMatches[i].trainIdx].pt;
 
           queryIdxs.push_back( filteredMatches[i].queryIdx );
           trainIdxs.push_back( filteredMatches[i].trainIdx );
-          circle(roi_out, p, 3, Scalar(0, 255, 255), 1, CV_AA);
-          line(roi_out, p, p + Point2f((float)cos(angle), (float)-sin(angle))*(float)30, Scalar(0, 0, 255), 1);
+          circle(roi_out, p, 3, Scalar(0, 255, 255), 1);
+          //float angle = keypoints2[filteredMatches[i].trainIdx].angle;
+          //line(roi_out, p, p + Point2f((float)cos(angle), (float)-sin(angle))*(float)30, Scalar(0, 0, 255), 1);
         }
+        //for( size_t i=0; i<point_now.size(); i++)
+        //{
+        //  circle(roi_out, point_now[i], 3, Scalar(0, 0, 255), 1);
+        //}
         points1.clear();
         points2.clear();
         KeyPoint::convert(keypoints1, points1, queryIdxs);
         KeyPoint::convert(keypoints2, points2, trainIdxs);
+        //point_last = points2;
+        point_last.clear();
+        point_last.push_back(points2[0] + Point2f(trackWindow.x, trackWindow.y));
+        for( size_t i=1; i<points2.size(); i++ )
+        {
+          if( points2[i] != points2[i-1] )
+            point_last.push_back(points2[i] + Point2f(trackWindow.x, trackWindow.y));
+        }
         Mat status;
         printf("findHomography\n");
         Mat H12 = findHomography( Mat(points1), Mat(points2), CV_RANSAC, 1 , mask);
@@ -288,17 +343,17 @@ int main(int argc, char * argv[])
         trackWindow.width = 2*DELTA;
         trackWindow.height = 2*DELTA;
         rectangle(gray_out, trackWindow, Scalar(0, 0, 255), 1);
-        line(gray_out, Point2d(trackWindow.x, trackWindow.y),
-            Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y + trackWindow.height - 1),
-            Scalar(0, 0, 255), 1);
-        line(gray_out, Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y),
-            Point2d(trackWindow.x, trackWindow.y + trackWindow.height - 1),
-            Scalar(0, 0, 255), 1);
+        //line(gray_out, Point2d(trackWindow.x, trackWindow.y),
+        //    Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y + trackWindow.height - 1),
+        //    Scalar(0, 0, 255), 1);
+        //line(gray_out, Point2d(trackWindow.x + trackWindow.width - 1, trackWindow.y),
+        //    Point2d(trackWindow.x, trackWindow.y + trackWindow.height - 1),
+        //    Scalar(0, 0, 255), 1);
 
         measurement.at<float>(0) = aver.x + trackWindow.x;
         measurement.at<float>(1) = aver.y + trackWindow.y;
         KF.correct(measurement);
-        printf("++++++++++correct; measure x:%f, y:%f\n", measurement.at<float>(0), measurement.at<float>(1));
+        printf("----------correct; measure x:%f, y:%f\n", measurement.at<float>(0), measurement.at<float>(1));
     }
 
     imshow("track", gray_out);

@@ -14,7 +14,6 @@ int main (int argc, char* argv[])
   char *fbp = 0;
   int x = 0, y = 0;
   long location = 0;
-  int i;
 
   unsigned char col[] = {255u, 255u, 255u, 255u};
 
@@ -35,7 +34,15 @@ int main (int argc, char* argv[])
     exit(3);
   }
 
-  screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
+  printf("The mem is :%d\n",finfo.smem_len);  
+  printf("The line_length is :%d\n",finfo.line_length);  
+  printf("The xres is :%d\n",vinfo.xres);  
+  printf("The yres is :%d\n",vinfo.yres);  
+  printf("The xres_vir is :%d\n",vinfo.xres_virtual);  
+  printf("The yres_vir is :%d\n",vinfo.yres_virtual);  
+  printf("bits_per_pixel is :%d\n",vinfo.bits_per_pixel); 
+
+  screensize = vinfo.xres_virtual * vinfo.yres_virtual * vinfo.bits_per_pixel / 8;
   /*这就是把fp所指的文件中从开始到screensize大小的内容给映射出来，得到一个指向这块空间的指针*/
   fbp =(char *) mmap (0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fp, 0);
 
@@ -49,17 +56,22 @@ int main (int argc, char* argv[])
   x = atoi(argv[1]);
   y = atoi(argv[2]);
 
-  location = x * (vinfo.bits_per_pixel / 8) + y  *  finfo.line_length;
   //location = 0;
   //
 
-  unsigned int j = 0x3ffffu;
+  unsigned int t = 0x1ffu;
+  unsigned int i;
+  unsigned int j;
 
-  while(j--)
+  while(t--)
   {
-    for(i=0; i<200; i++)
+    for(j=0; j<10; j++)
     {
-      memcpy(fbp+location+i*4, col, 4);
+      location = x * (vinfo.bits_per_pixel / 8) + (y+j)*finfo.line_length;
+      for(i=0; i<vinfo.xres; i++)
+      {
+        memcpy(fbp+location+i*4, col, 4);
+      }
     }
   }
 
